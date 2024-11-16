@@ -13,12 +13,16 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Builder
 @Entity
+@Table(name = "urun", uniqueConstraints = {
+        @UniqueConstraint(name = "urun_ad_key", columnNames = {"ad"}),
+        @UniqueConstraint(name = "urun_aciklama_key", columnNames = {"aciklama"})
+})
 public class Urun extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false,unique = true)
+    @Column(nullable = false)
     private String ad;
 
     @Column(nullable = false)
@@ -36,10 +40,8 @@ public class Urun extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime olusturmaTarihi;
 
-//!    @PrePersist anotasyonunu sadece entity sınıflarında kullanmalısınız.
     @PrePersist
     public void prePersist() {
-        this.olusturmaTarihi = LocalDateTime.now(); // Kayıt tarihi otomatik olarak ayarlanır
+        this.olusturmaTarihi = LocalDateTime.now();
     }
-
 }

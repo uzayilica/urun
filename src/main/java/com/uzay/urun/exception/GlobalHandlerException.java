@@ -8,10 +8,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @ControllerAdvice
 public class GlobalHandlerException {
@@ -46,13 +43,41 @@ public class GlobalHandlerException {
  }
 
 
- @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<Object> handleConstraintViolation(DataIntegrityViolationException exception  ) {
-     return ResponseEntity.status(HttpStatus.CONFLICT).body(exception.getMessage());
- }
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConstraintViolation(DataIntegrityViolationException ex) {
+        Map<String, Object> response = new HashMap<>();
+        Set<String> errors = new HashSet<>();
 
+        String errorMessage = ex.getRootCause().getMessage().toLowerCase();
+        System.out.println("Debug - Gelen hata mesajı: " + errorMessage);
 
+        // Hata mesajlarını daha ayrıntılı kontrol edelim
+        if (errorMessage.contains("unique constraint") && errorMessage.contains("ad")) {
+            errors.add("Bu ürün adı zaten kullanımda");
+        }
 
+        if (errorMessage.contains("unique constraint") && errorMessage.contains("aciklama")) {
+            errors.add("Bu açıklama zaten kullanımda");
+        }
 
+        // Hiçbir spesifik hata bulunamadıysa
+        if (errors.isEmpty()) {
+            errors.add("Veritabanı kısıtlama hatası oluştu");
+            System.out.println("Yakalanmayan hata mesajı: " + errorMessage);
+        }
+
+        response.put("timestamp", new Date());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("errors", new ArrayList<>(errors));
+        response.put("message", String.join(", ", errors));
+
+        // Debug - oluşturulan hataları kontrol edelim
+        System.out.println("Oluşturulan hatalar: " + errors);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
 
 }
+
+
+
