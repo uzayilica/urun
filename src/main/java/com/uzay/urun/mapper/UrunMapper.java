@@ -3,7 +3,10 @@ package com.uzay.urun.mapper;
 import com.uzay.urun.dto.UrunRequestDto;
 import com.uzay.urun.dto.UrunResponseDto;
 import com.uzay.urun.entity.Urun;
+import jakarta.persistence.Column;
+import org.springframework.stereotype.Component;
 
+@Component
 public class UrunMapper  implements  UrunMapperInterface{
 
 
