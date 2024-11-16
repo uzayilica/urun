@@ -21,7 +21,6 @@ public class Urun extends BaseEntity {
     @Column(nullable = false,unique = true)
     private String ad;
 
-
     @Column(nullable = false)
     private BigDecimal fiyat;
 
