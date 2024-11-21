@@ -1,0 +1,186 @@
+version: '3.7'
+
+services:
+  feign:
+    image: kumandabey/feign:latest
+    container_name: feign
+    ports:
+      - "8050:8050"
+    networks:
+      - ortakag
+    environment:
+      - spring.application.name=UrunFeignClient
+      - server.port=8050
+      - eureka.client.fetch-registry=true
+      - eureka.client.register-with-eureka=true
+      - eureka.client.serviceUrl.defaultZone=http://eurekaserver:8761/eureka
+
+  eurekaserver:
+    image: kumandabey/eurekaserver
+    container_name: eurekaserver
+    ports:
+      - "8761:8761"
+    networks:
+      - ortakag
+    environment:
+      - spring.application.name=Eurekaservergeneltekrar
+      - eureka.client.register-with-eureka=false
+      - eureka.client.fetch-registry=false
+      - server.port=8761
+
+  configserver:
+    image: kumandabey/configserver
+    container_name: configserver
+    ports:
+      - "8088:8088"
+    networks:
+      - ortakag
+    environment:
+      - spring.application.name=config-server
+      - spring.profiles.active=native
+      - spring.cloud.config.server.native.search-locations=classpath:/config
+      - server.port=8088
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8761/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgresdb:
+    image: postgres:latest
+    container_name: postgresdb
+    ports:
+      - "5432:5432"
+    networks:
+      - ortakag
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=12345
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  urun:
+    image: kumandabey/urun
+    container_name: urun
+    ports:
+      - "8080:8080"
+      - "5005:5005" # Debug portu
+    networks:
+      - ortakag
+    volumes:
+      - ./src:/app/src   # Kod dosyalarını bağla
+      - ./target:/app/target   # Derlenmiş dosyaları bağla
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      - spring.application.name=urun
+      - spring.profiles.active=admin
+      - server.port=8080
+      - spring.datasource.username=postgres
+      - spring.datasource.password=12345
+      - spring.datasource.url=jdbc:postgresql://postgresdb:5432/postgres
+      - spring.jpa.hibernate.ddl-auto=update
+      - spring.jpa.show-sql=true
+      - eureka.client.serviceUrl.defaultZone=http://eurekaserver:8761/eureka
+      - eureka.client.fetch-registry=true
+      - eureka.client.register-with-eureka=true
+      - info.app.name=urun
+      - info.app.port=8080
+      - info.app.description=Ürünler Uygulaması Bilgi Sayfası
+      - spring.config.import=optional:configserver:http://configserver:8088
+      - management.endpoints.web.exposure.include=*
+      - management.info.env.enabled=true
+      - management.endpoint.env.enabled=true
+      - management.health.readinessstate.enabled=true
+      - management.health.livenessstate.enabled=true
+      - management.endpoint.health.show-details=always
+      - management.info.os.enabled=true
+      - management.endpoint.health.probes.enabled=true
+      - management.endpoint.health.enabled=true
+      - management.endpoint.info.enabled=true
+      - degiskenler.isim="uzay"
+      - degiskenler.password=4267462
+      - degiskenler.yetenek[0]="java"
+      - degiskenler.yetenek[1]="react"
+      - degiskenler.vucut.boy=188
+      - degiskenler.vucut.kilo=104
+      - degiskenler.vucut.sicaklik=35
+      - spring.kafka.bootstrap-servers=kafka:29092
+      - spring.kafka.consumer.bootstrap-servers=kafka:29092
+      - spring.kafka.producer.bootstrap-servers=kafka:29092
+      - spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+      - spring.kafka.producer.value-serializer=org.apache.kafka.common.serialization.StringSerializer
+
+
+    depends_on:
+      postgresdb:
+        condition: service_healthy
+
+  gatewayserver:
+    image: kumandabey/gatewayserver
+    container_name: gatewayserver
+    ports:
+      - "8888:8888"
+    networks:
+      - ortakag
+    environment:
+      - spring.application.name=urungatewayserver
+      - eureka.client.register-with-eureka=true
+      - eureka.client.fetch-registry=true
+      - eureka.client.serviceUrl.defaultZone=http://eurekaserver:8761/eureka
+      - server.port=8888
+      - spring.cloud.gateway.mvc.routes[0].id=urun
+      - spring.cloud.gateway.mvc.routes[0].uri=lb://urun
+      - spring.cloud.gateway.mvc.routes[0].predicates=Path=/urun-service/**
+      - spring.main.web-application-type=reactive
+      - spring.cloud.discovery.enabled=true
+      - spring.cloud.gateway.discovery.locator.lower-case-service-id=true
+      - management.endpoint.gateway.enabled=true
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    networks:
+      - ortakag
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "2181" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    networks:
+      - ortakag
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: [ "CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "localhost:9092" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ortakag:
+    driver: bridge
